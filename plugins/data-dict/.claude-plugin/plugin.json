@@ -1,0 +1,13 @@
+{
+  "name": "data-dict",
+  "displayName": "data-dict",
+  "version": "0.1.0",
+  "description": "Create, read, and validate data-dict.yaml data dictionaries with the data-dict CLI.",
+  "author": {
+    "name": "mtthw.eklnd",
+    "email": "mtthw.eklnd@gmail.com"
+  },
+  "homepage": "https://data-dict.tidyverse.org",
+  "license": "MIT",
+  "keywords": ["data-dictionary", "data-contract", "parquet", "validation", "tidyverse"]
+}
