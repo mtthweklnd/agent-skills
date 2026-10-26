@@ -1,52 +1,37 @@
 ---
 name: r-dm
-description: Use when code loads or uses dm (library(dm), dm::), building relational data models in R, managing primary/foreign keys (PK/FK) across multiple data frames or tibbles, replacing manual left_join chains via dm_flatten_to_tbl() or dm_zoom_to(), cascading relational filters with dm_filter(), validating constraints with dm_examine_constraints(), drawing ER diagrams with dm_draw(), normalizing tables with decompose_table(), or syncing multi-table models with DBI databases via dm_from_con() and copy_dm_to().
+description: dm in R — relational data models over many tables. Use for library(dm)/dm::, declaring PK/UK/FK across tibbles or a DBI database, dm_filter() cascades, dm_flatten_to_tbl()/dm_zoom_to() in place of left_join chains, dm_examine_constraints(), dm_draw(), decompose_table() normalization, dm_from_con()/copy_dm_to() round-trips, dm_rows_* writes.
 ---
 
-# Relational Data Models in R with {dm}
+# Relational data models in R with {dm}
 
-Read `references/API.md` before writing code. Run `library(dplyr)` before `library(dm)`.
+A `dm` is a list of tables plus the key metadata that relates them. Once the keys are declared, filtering, joining and validating happen across the whole model instead of table by table.
 
-## Core Workflow
+Read [`references/api.md`](references/api.md) before writing `dm` code — it carries every signature with its defaults, plus the naming grammar that makes a guessed function name usually right.
 
-1. **Construct**: `dm(t1, t2)`, `as_dm(named_list)`, or `dm_from_con(con, learn_keys = TRUE)`.
-2. **Keys**: Discover via `dm_enum_pk_candidates()` / `dm_enum_fk_candidates()`. Add via `dm_add_pk()`, `dm_add_uk()`, `dm_add_fk()` (`columns = c(a, b)` for compound keys).
-3. **Validate**: `dm_examine_constraints()` checks uniqueness/referential integrity; `dm_examine_cardinalities()` checks `0_n`, `1_n`, `0_1`, `1_1` mappings.
-4. **Query & Transform**:
-   - **Cascade filter**: `dm_filter(dm, parent = (status == "active"))` filters `parent` and semi-joins connected child tables immediately.
-   - **Zoom & mutate**: `dm_zoom_to(dm, tbl)` enables `dplyr` verbs (`mutate`, `summarize`, `left_join`, `filter`) while tracking keys. Exit via `dm_update_zoomed()`, `dm_insert_zoomed("new_tbl")`, or `dm_discard_zoomed()`.
-   - **Flatten**: `dm_flatten_to_tbl(dm, .start = fact_tbl, .recursive = TRUE)` joins dimension tables into `.start` along FKs.
-   - **Extract**: `pull_tbl(dm, tbl)` or `dm$tbl`.
+## Workflow
 
-## Quick Reference (`no mark`=req, `(opt)`=optional, `(adv)`=advanced)
+Attach `dplyr` before `dm`, since `dm` masks several dplyr generics.
 
-|Function|Parameters|Purpose|
-|---|---|---|
-|`dm()` / `as_dm()`|`...`, `.name_repair`(opt), `.quiet`(adv) / `x`|Build `dm` from tables/list|
-|`dm_from_con()`|`con`, `table_names`(opt), `learn_keys`(opt), `.names`(adv), `...`(adv:`schema`)|Load `dm` from DBI connection|
-|`dm_add_pk()`/`uk()`|`dm`, `table`, `columns`, `autoincrement`(opt,pk), `check`(opt), `force`(adv,pk)|Define primary or unique key|
-|`dm_add_fk()`|`dm`, `table`, `columns`, `ref_table`, `ref_columns`(opt), `check`(opt), `on_delete`(adv)|Define foreign key (defaults to `ref_table` PK)|
-|`dm_enum_pk_candidates()`|`dm`, `table`|List candidate PK columns|
-|`dm_enum_fk_candidates()`|`dm`, `table`, `ref_table`|List candidate FK columns referencing `ref_table`|
-|`dm_examine_constraints()`|`.dm`, `.progress`(opt), `.max_value`(adv)|Tibble of PK/UK/FK constraint checks|
-|`dm_examine_cardinalities()`|`.dm`, `.progress`(opt)|Inspect FK cardinalities|
-|`dm_get_all_pks()`/`fks()`|`dm`, `table`/`parent_table`(opt)|Retrieve defined PKs/FKs|
-|`dm_filter()`|`.dm`, `...` (`tbl = (expr)`)|Cascade filter across FK-linked tables|
-|`dm_zoom_to()`|`dm`, `table`|Focus on `table` for `dplyr` verbs|
-|`dm_update_zoomed()`|`dm`|Overwrite original table with zoomed table|
-|`dm_insert_zoomed()`|`dm`, `new_tbl_name`(opt), `repair`(adv), `quiet`(adv)|Save zoomed table as new table|
-|`dm_flatten_to_tbl()`|`dm`, `.start`, `...`(opt:tables), `.recursive`(opt), `.join`(opt)|Join direct (`.recursive=TRUE` for nested) parents|
-|`pull_tbl()`|`dm`, `table`, `keyed`(adv)|Extract single table|
-|`copy_dm_to()`|`dest`, `dm`, `set_key_constraints`(opt), `table_names`(opt), `temporary`(opt), `schema`(adv), `progress`(opt)|Deploy `dm` to DBI database|
-|`collect.dm()`|`x`, `progress`(opt)|Materialize lazy DB `dm` locally|
-|`dm_rows_insert()`/`upsert()`|`x`, `y`, `in_place`(opt), `progress`(opt)|Modify rows (`insert`,`update`,`patch`,`upsert`,`delete`)|
-|`dm_draw()`|`dm`, `rankdir`(opt), `col_attr`(opt), `view_type`(opt:`"keys_only"`,`"all"`,`"title_only"`), `column_types`(opt)|Render ER diagram|
-|`decompose_table()`|`.data`, `new_id_column`, `...` (cols)|Split flat table into `list(child_table, parent_table)`|
-|`dm_paste()`|`dm`, `select`(opt), `tab_width`(adv), `options`(opt), `path`(opt)|Emit R code to recreate `dm`|
+1. **Construct.** `dm(t1, t2)` from loose tables, `as_dm(named_list)` from a list, `dm_from_con(con)` from a database.
+2. **Declare keys.** Discover candidates with `dm_enum_pk_candidates(dm, tbl)` and `dm_enum_fk_candidates(dm, tbl, ref_tbl)`, then `dm_add_pk()`, `dm_add_uk()`, `dm_add_fk()`. Compound keys take `columns = c(a, b)`.
+3. **Validate before relying on the model.** `dm_examine_constraints()` returns a row per constraint with `is_key` TRUE or FALSE; `dm_examine_cardinalities()` reports each FK as `0_n`, `1_n`, `0_1` or `1_1`. Every constraint accounted for before step 4 — a silently violated FK turns every later cascade and flatten into quietly wrong data.
+4. **Query.** `dm_filter()` to subset the model, `dm_flatten_to_tbl()` to get one wide table, `dm_zoom_to()` to run dplyr verbs on one table in place, `pull_tbl(dm, tbl)` or `dm$tbl` to extract one.
 
-## Pitfalls & Edge Cases
+Freeze a model you explored interactively with `dm_paste()`, which prints the code that rebuilds it.
 
-- **`dm_filter()` syntax**: Pass named expressions `dm_filter(my_dm, orders = (year == 2024))`. Never use deprecated `dm_filter(dm, table, expr)` or `dm_apply_filters()`.
-- **Exiting zoom**: Always finish `dm_zoom_to()` with `dm_update_zoomed()`, `dm_insert_zoomed()`, or `dm_discard_zoomed()` before calling `dm_*` functions or `pull_tbl()`.
-- **Cycles/parallel FKs in `dm_flatten_to_tbl()`**: Multiple FK paths between tables (e.g., `flights -> airports` via `origin` and `dest`) error; specify tables in `...`, remove one FK with `dm_rm_fk()`, or join via `dm_zoom_to()`.
-- **DB persistence**: `copy_dm_to()` defaults to `temporary = TRUE`; use `temporary = FALSE` to persist tables and `in_place = TRUE` in `dm_rows_*()` to persist row modifications.
+## Pitfalls
+
+- **`dm_filter()` takes named expressions**, one per table: `dm_filter(dm, orders = (year == 2024))`. The old positional form `dm_filter(dm, table, expr)` and the separate `dm_apply_filters()` step are both gone — filters apply on the spot.
+- **Always leave a zoom by the front door.** `dm_update_zoomed()`, `dm_insert_zoomed("name")` or `dm_discard_zoomed()`, before any `dm_*` call or `pull_tbl(dm, tbl)`.
+- **A `mutate()` over a key column drops the key**, by design. Re-add it after the manipulation.
+- **Parallel FK paths break `dm_flatten_to_tbl()`.** Two routes between the same pair of tables (`flights -> airports` by `origin` and by `dest`) error out; name the tables you want in `...`, drop one FK with `dm_rm_fk()`, or join explicitly under a zoom.
+- **Nothing persists by default.** `copy_dm_to()` and `compute()` default to `temporary = TRUE`; `dm_rows_*()` default to `in_place = FALSE`. Opt in explicitly, and wrap every real write in a transaction.
+- **`learn_keys = TRUE` is Postgres, SQL Server and MariaDB only.** Elsewhere `dm_from_con()` errors — take the tables and declare the keys by hand.
+
+## Reference
+
+- [`references/api.md`](references/api.md) — every exported function: signature, defaults, naming grammar, and the current call for each superseded name (`cdm_*`, `dm_apply_filters()`, `dm_squash_to_tbl()`, …).
+- [`references/db.md`](references/db.md) — a `dm` backed by a DBI connection: `dm_from_con()`, `copy_dm_to()`/`collect()`/`compute()`, `table_names` collisions, schemas, inspecting generated SQL, and the `dm_rows_*()` changeset process.
+- [`references/query.md`](references/query.md) — how `dm_filter()` cascades and when it errors, `dm_flatten_to_tbl()` against `dm_zoom_to()` against `dm_keyed_tbl`, and the full zoomed verb set.
+- [`references/model.md`](references/model.md) — `decompose_table()` normalization, `dm_wrap_tbl()`/`dm_nest_tbl()`/`dm_pack_tbl()` nesting, `dm_draw()` views and colours, `dm_paste()`.
