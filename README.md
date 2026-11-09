@@ -9,6 +9,8 @@ Standalone skills in [`skills/`](skills/):
 | Skill | Use it to |
 | - | - |
 | [`r-dm`](skills/r-dm/SKILL.md) | Build, query, validate, and diagram relational data models in R with [{dm}](https://dm.cynkra.com/) |
+| [`r-openxlsx2`](skills/r-openxlsx2/SKILL.md) | Read, write, and style `.xlsx` files in R with [{openxlsx2}](https://janmarvin.github.io/openxlsx2/), including native pivot tables, slicers, conditional formatting, and charts |
+| [`r-rlang`](skills/r-rlang/SKILL.md) | Create, inspect, and modify environments in R with [{rlang}](https://rlang.r-lib.org/)'s `env_*` functions, plus scoping and call-stack introspection |
 | [`r-S7`](skills/r-S7/SKILL.md) | Define S7 classes, properties, generics, and methods in R with [{S7}](https://rconsortium.github.io/S7/) |
 | [`solutions-advisor`](skills/solutions-advisor/SKILL.md) | Evaluate technical and architecture options with weighted criteria, trade-offs, and a clear recommendation |
 
